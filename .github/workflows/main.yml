@@ -1,0 +1,55 @@
+name: Terminal Container
+
+on:
+  workflow_dispatch:
+    inputs:
+      session_id:
+        description: 'Terminal session ID'
+        required: true
+        type: string
+      user_id:
+        description: 'Supabase user ID'
+        required: true
+        type: string
+      backend_url:
+        description: 'Backend API URL'
+        required: true
+        type: string
+
+jobs:
+  start-container:
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 60
+    env:
+      SESSION_ID: ${{ inputs.session_id }}
+      BACKEND_URL: ${{ inputs.backend_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup container environment
+        run: |
+          chmod +x action/setup.sh
+          ./action/setup.sh
+
+      - name: Build or pull agent image
+        run: |
+          docker build -t codew-agent:latest -f action/Dockerfile .
+
+      - name: Run terminal container
+        run: |
+          docker run --rm \
+            --name "terminal-${{ inputs.session_id }}" \
+            -e SESSION_ID="${{ inputs.session_id }}" \
+            -e BACKEND_URL="${{ inputs.backend_url }}" \
+            -e AUTH_TOKEN="${{ inputs.auth_token }}" \
+            -e TERM=xterm-256color \
+            --network host \
+            codew-agent:latest
+
+      - name: Cleanup container
+        if: always()
+        run: |
+          docker rm -f "terminal-${{ inputs.session_id }}" 2>/dev/null || true
+          docker system prune -f --volumes 2>/dev/null || true
